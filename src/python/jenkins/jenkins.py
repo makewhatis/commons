@@ -1,6 +1,7 @@
 from jenkinsapi.jenkins import Jenkins
 from jenkinsapi.job import Job
 from jenkinsapi.exceptions import JenkinsAPIException
+from jenkinsapi.exceptions import UnknownJob
 
 import os
 import sys
@@ -32,6 +33,12 @@ app.add_option(
   help="config path"
 )
 app.add_option(
+  "--config_dir",
+  default=None,
+  dest="config_dir",
+  help="config directory"
+)
+app.add_option(
   "--outdir",
   default=None,
   dest="outdir",
@@ -56,6 +63,7 @@ def parse_arguments(args):
     'disable': disable,
     'show': show,
     'dump': dump,
+    'restore': restore,
   }
 
   return avail[args[0]]  
@@ -136,6 +144,42 @@ def enable(j, name):
   result = job.enable()  
   print("result: %s" % result.status_code)
 
+def restore(j, target):
+  """
+  Restore jobs from a config directory
+  """
+  config_dir = app.get_options().config_dir
+
+  if config_dir is None:
+    log.error("no config_dir defined.")
+    sys.exit()
+
+  if not os.path.exists(os.path.realpath(config_dir)):
+    log.error("config path does not exist")
+    sys.exit()
+
+  for job in os.listdir(config_dir):
+    # here we need to:
+    # check for config.xml
+    # check for job on target server
+    # if job exists, update it
+    # if not create it. 
+    config_file = "%s/%s/config.xml" % (config_dir, job)
+    if not os.path.exists(config_file):
+      log.error("config file does not exist: %s" %config_file)
+      sys.exit()
+
+    job_xml = read_config(config_file)
+
+    try:
+      jobj = j.get_job(job)
+      if not jobj.get_config() == job_xml:
+        log.info("Updating %s" % job)
+        jobj.update_config(job_xml)
+    except UnknownJob as e:
+      log.error("job doesnt exist. creating")
+      j.create_job(job, job_xml)
+
 
 def disable(j, name):
   """
@@ -204,6 +248,12 @@ def main(args, options):
   j = Jenkins("http://%s" % server)
   j.server = server
   cmd = parse_arguments(args)
-  cmd(j, app.get_options().job) 
+
+  if cmd.__name__ == restore:
+    target = app.get_options().master
+  else:
+    target = app.get_options().job
+
+  cmd(j, target) 
 
 app.main()
