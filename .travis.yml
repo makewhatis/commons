@@ -18,5 +18,5 @@ script: |
 
 notifications:
   email:
-      - john.sirois@gmail.com
+      - david@makewhat.is
 
